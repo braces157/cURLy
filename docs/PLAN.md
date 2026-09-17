@@ -42,15 +42,21 @@ Unchecked milestones are not implemented. Consult [SPEC.md](SPEC.md) for complet
 - [x] Searchable history/details panes with header/body views, scrolling, JSON display highlighting, and truncation indicators.
 - [x] Arrows/j/k, Tab, /, r, q; confirmation for methods other than GET/HEAD/OPTIONS.
 - [x] Asynchronous replay, loading feedback, cancellation, and recorded replay history.
-- [ ] Ratatui state/render tests and manual Windows/macOS/Linux resize and restoration checks.
+- [ ] Ratatui state/render tests and manual Windows resize/restoration checks. Cross-platform TUI verification is deferred with Linux/macOS support.
 
 ## 5. Releases and documentation
 
-- [ ] Verify formatting, Clippy, and tests in CI across supported platforms. (Workflow configured; a remote CI run is still required.)
-- [ ] Build Windows x64, Linux x64-musl, macOS Intel, and macOS Apple Silicon artifacts. (Windows x64 is locally built and smoke-tested; the other targets await CI.)
-- [ ] Generate checksums, inspect runtime dependencies, and smoke-test artifacts. (Windows x64 is locally verified; the workflow automates the same checks for all four targets.)
+- [ ] Verify formatting, Clippy, and tests in Windows CI. (Workflow configured; a remote CI run is still required.)
+- [x] Build and smoke-test the Windows x64 artifact locally.
+- [x] Generate the Windows x64 checksum and inspect its runtime dependencies locally.
 - [x] Publish accurate install/use, configuration, persistence/privacy, replay, and troubleshooting documentation.
 - [ ] Choose a license and add its exact text before distribution; do not assume a license on the owner's behalf.
+
+## Deferred platform support
+
+- [ ] Add Linux x64-musl CI/release packaging after native verification is available.
+- [ ] Add macOS Intel and Apple Silicon CI/release packaging after native verification is available.
+- [ ] Repeat TUI resize/restoration and runtime-linkage checks on each added platform.
 
 ## Deferred beyond v1
 

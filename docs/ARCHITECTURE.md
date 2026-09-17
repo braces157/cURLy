@@ -68,4 +68,4 @@ TUI replay confirms methods other than GET, HEAD, and OPTIONS and records each r
 
 Use an explicit terminal-session guard and panic handling to restore raw mode, cursor visibility, and the alternate screen. Structure the TUI around testable state transitions and asynchronous completion events, including loading and cancellation.
 
-Release packaging targets `x86_64-pc-windows-msvc`, `x86_64-unknown-linux-musl`, `x86_64-apple-darwin`, and `aarch64-apple-darwin`. Inspect dependency linkage on each target; Rustls and bundled SQLite do not by themselves prove a fully static binary. Supported OS libraries may remain target-dependent.
+Release packaging currently targets only `x86_64-pc-windows-msvc`, which has been locally built, smoke-tested, and dependency-inspected. Linux and macOS packaging are deferred until those targets can be verified on their native platforms.

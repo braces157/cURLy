@@ -2,7 +2,7 @@
 
 `curly` is a single-binary Rust HTTP client for personal JSON API workflows. The CLI is the primary interface; `curly tui` opens an optional history browser and replay UI.
 
-The current implementation includes the CLI/executor, exact pipeline output, saved requests, SQLite history/replay, and the TUI. Release automation targets Windows x64, Linux x64-musl, macOS Intel, and macOS Apple Silicon.
+The current implementation includes the CLI/executor, exact pipeline output, saved requests, SQLite history/replay, and the TUI. The currently supported and verified release target is Windows x64; Linux and macOS packaging are deferred until they can be properly verified.
 
 ## Build
 
@@ -20,7 +20,7 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-targets --all-features
 ```
 
-Windows x64 builds enable static CRT linking. TLS uses Rustls and SQLite is bundled, so the executable does not require OpenSSL or a separately installed SQLite library.
+Windows x64 release builds enable static CRT linking in the release workflow. TLS uses Rustls and SQLite is bundled, so the executable does not require OpenSSL or a separately installed SQLite library.
 
 ## Quick start
 
@@ -136,14 +136,9 @@ History-write failures emit a warning without replacing an otherwise successful 
 
 ## Releases
 
-The release workflow builds and packages:
+The release workflow currently builds and packages only `x86_64-pc-windows-msvc`. Linux and macOS release targets are intentionally deferred until they can be built, smoke-tested, and inspected on those platforms.
 
-- `x86_64-pc-windows-msvc`
-- `x86_64-unknown-linux-musl`
-- `x86_64-apple-darwin`
-- `aarch64-apple-darwin`
-
-Each archive gets a SHA-256 checksum and a runtime dependency/linkage report. Public release publication is intentionally blocked until the owner adds a chosen `LICENSE`, `LICENSE.txt`, or `LICENSE.md` file.
+The Windows archive gets a SHA-256 checksum and a runtime dependency report. Public release publication is intentionally blocked until the owner adds a chosen `LICENSE`, `LICENSE.txt`, or `LICENSE.md` file.
 
 ## Project documents
 

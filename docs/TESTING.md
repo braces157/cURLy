@@ -20,7 +20,7 @@ The current automated suite includes unit tests for request defaults/validation,
 
 On Windows x64, the required formatting, strict Clippy, and full test commands pass with 17 library tests and 12 subprocess integration tests. The optimized `x86_64-pc-windows-msvc` executable also builds and reports `curly 0.1.0`. Its import table was inspected with `dumpbin`; only Windows system DLLs are referenced. A ZIP and SHA-256 checksum are generated under `dist/`.
 
-The Linux-musl and two macOS release builds, PTY-driven terminal formatting checks, and manual TUI resize/restoration checks still require their target platforms/CI and must not be treated as locally verified.
+Linux and macOS release packaging is currently out of the supported release matrix and will be added later after native verification is available. PTY-driven terminal formatting checks and manual TUI resize/restoration checks remain outstanding for Windows.
 
 | Area | Required cases |
 | --- | --- |
@@ -42,7 +42,7 @@ Test observable contracts rather than duplicating implementation details. Use co
 
 ## Manual platform checks
 
-On Windows, macOS, and Linux, verify resizing, keyboard navigation, filtering, replay confirmation, loading, cancellation, and terminal restoration after success, errors, and panic. Confirm that noninteractive `curly tui` is rejected with actionable guidance.
+On Windows, verify resizing, keyboard navigation, filtering, replay confirmation, loading, cancellation, and terminal restoration after success, errors, and panic. Confirm that noninteractive `curly tui` is rejected with actionable guidance. Repeat these checks when Linux or macOS support is added later.
 
 Run a large download through a file sink and a downstream consumer that closes early. Check exact downloaded bytes and that diagnostics do not corrupt the body. Measure memory with increasing input sizes and record methodology rather than asserting bounded memory from a small fixture alone.
 
@@ -51,8 +51,5 @@ Run a large download through a file sink and a downstream consumer that closes e
 | Artifact target | Required evidence |
 | --- | --- |
 | Windows x64 / MSVC | Executable smoke test and imported-library inspection |
-| Linux x64 / musl | Executable smoke test and static/dynamic linkage inspection |
-| macOS Intel | Executable smoke test and linked-library inspection |
-| macOS Apple Silicon | Executable smoke test and linked-library inspection |
 
 Build from the committed lockfile, attach SHA-256 checksums, and verify the packaged executable launches without separately installed application libraries. Document target-dependent system library requirements and any unverified platform rather than claiming universal static linking.

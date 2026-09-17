@@ -9,16 +9,8 @@ permissions:
 
 jobs:
   checks:
-    name: ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - windows-latest
-          - ubuntu-latest
-          - macos-15-intel
-          - macos-15
+    name: Windows x64
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
