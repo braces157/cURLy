@@ -54,5 +54,6 @@ Require interactive stdin and stdout. Provide searchable history beside request/
 - Use local test servers and temporary storage directories. Do not depend on public APIs or real credentials in automated tests.
 - Add tests for meaningful behavior and failure modes using [docs/TESTING.md](docs/TESTING.md). Check exact bytes and exit codes for pipeline behavior.
 - Once Cargo scaffolding exists, run `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets --all-features -- -D warnings`, and `cargo test --locked --all-targets --all-features` for implementation milestones.
-- Release Windows x64, Linux x64-musl, macOS Intel, and macOS Apple Silicon artifacts with checksums. Inspect actual runtime dependencies; do not assume all targets are fully static.
+- Release and verify Windows x64 only for now. Linux and macOS release support is deferred until those platforms can be properly built, smoke-tested, and dependency-inspected. Do not re-add unverified platform release targets.
 - Keep docs and milestone status accurate. Report what changed, what was verified, and material limitations. Do not claim unrun tests or unbuilt releases passed.
+- After any change that affects the executable, once the Windows release build and required checks succeed, automatically copy the verified binary to `%USERPROFILE%\.local\bin\curly.exe`. This directory is already on the user PATH. Before finishing, verify from a fresh shell that `where curly` resolves to that file and `curly --version` succeeds; do not wait for the user to ask for PATH installation again.
