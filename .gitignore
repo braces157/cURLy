@@ -1,0 +1,26 @@
+# Rust build output; Cargo.lock must be committed for this executable.
+/target/
+
+# Release output.
+/dist/
+
+# Local credentials and developer-only runtime data.
+.env
+.env.*
+!.env.example
+/.curly-local/
+
+# Editor and operating-system files.
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+
+# Added by cargo
+
+/target
