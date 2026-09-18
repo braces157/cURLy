@@ -18,7 +18,7 @@ The current automated suite includes unit tests for request defaults/validation,
 
 ## Current local verification
 
-On Windows x64, the required formatting, strict Clippy, and full test commands pass with 17 library tests and 12 subprocess integration tests. The optimized `x86_64-pc-windows-msvc` executable also builds and reports `curly 0.1.0`. Its import table was inspected with `dumpbin`; only Windows system DLLs are referenced. A ZIP and SHA-256 checksum are generated under `dist/`.
+On Windows x64, the required formatting, strict Clippy, and full test commands pass with 41 library tests and 12 subprocess integration tests. The optimized `x86_64-pc-windows-msvc` executable also builds and reports `curly 0.1.0`. Its import table was inspected with `dumpbin`; only Windows system DLLs are referenced. A ZIP and SHA-256 checksum are generated under `dist/`.
 
 Linux and macOS release packaging is currently out of the supported release matrix and will be added later after native verification is available. PTY-driven terminal formatting checks and manual TUI resize/restoration checks remain outstanding for Windows.
 
@@ -36,13 +36,13 @@ Linux and macOS release packaging is currently out of the supported release matr
 | History | Default terminal behavior and explicit overrides, full metadata, 64 KiB preview boundaries/truncation, newest 1,000 retention, redaction in headers and auth structures, list/show/clear |
 | SQLite | Fresh schema, migrations from supported versions, invalid/newer versions, transaction rollback, bounded lock contention, concurrent writes, warning-only write failures |
 | Replay | Complete requests, preserved environment refs, missing variables/files/credentials, truncated/unavailable bodies, no redaction placeholders sent, replay history records |
-| TUI | Ratatui test backend, search, focus, navigation, views, scrolling, empty/error states, truncation, confirmation methods, loading/cancellation, background persistence |
+| TUI | Composer parsing/order preservation, request/history workspace rendering, search, focus, navigation, views, scrolling, empty/error states, truncation, history-to-composer loading, confirmation methods, loading/cancellation, background persistence |
 
 Test observable contracts rather than duplicating implementation details. Use controllable delayed/chunked responses for timeout/cancellation coverage; avoid flaky timing thresholds. Distinguish ordinary non-terminal subprocess tests from PTY-driven terminal tests. Document any platform-specific test limitations.
 
 ## Manual platform checks
 
-On Windows, verify resizing, keyboard navigation, filtering, replay confirmation, loading, cancellation, and terminal restoration after success, errors, and panic. Confirm that noninteractive `curly tui` is rejected with actionable guidance. Repeat these checks when Linux or macOS support is added later.
+On Windows, verify resizing, composer editing/paste/send, response scrolling/header switching, history loading/filtering, replay confirmation, loading, cancellation, and terminal restoration after success, errors, and panic. Confirm that noninteractive `curly tui` is rejected with actionable guidance. Repeat these checks when Linux or macOS support is added later.
 
 Run a large download through a file sink and a downstream consumer that closes early. Check exact downloaded bytes and that diagnostics do not corrupt the body. Measure memory with increasing input sizes and record methodology rather than asserting bounded memory from a small fixture alone.
 
@@ -53,3 +53,11 @@ Run a large download through a file sink and a downstream consumer that closes e
 | Windows x64 / MSVC | Executable smoke test and imported-library inspection |
 
 Build from the committed lockfile, attach SHA-256 checksums, and verify the packaged executable launches without separately installed application libraries. Document target-dependent system library requirements and any unverified platform rather than claiming universal static linking.
+
+TUI usability coverage includes Unicode cursor insertion/deletion, edit cancellation, multiline editing, Tab commit/advance, ignoring key-release events, and editor/help rendering at 120×32, 80×24, 48×16, and 20×8. These are TestBackend checks; native interactive Windows visual/resize/restoration checks remain outstanding.
+
+Mouse/preview tests cover click targets at multiple sizes, modal isolation, history offsets, wheel routing, syntax colors, quoted HTML delimiters and raw script text, malformed/truncated Unicode, terminal controls, binary summaries, resize wrapping, and scroll bounds. Native Windows Terminal click/wheel and mouse-capture restoration still require manual verification.
+
+The application-shell redesign was visually inspected using a 140×42 TestBackend render (not a native terminal screenshot). Responsive mouse tests also verify every composer field stays reachable and Send remains aligned with the URL bar at 120×32, 80×24, and 48×18. Existing scrolling/highlighting and Unicode editor checks cover the new layout.
+
+Guided editor tests cover duplicate query names and literal delimiters across save/reopen/cancel, empty values, invalid row recovery/removal, URL and JSON validation, JSON formatting/newline indentation, explicit GET with a body, non-destructive JSON starters, and row-editor scrolling/click targets at three viewport sizes.

@@ -1,6 +1,6 @@
 # cURLy
 
-`curly` is a single-binary Rust HTTP client for personal JSON API workflows. The CLI is the primary interface; `curly tui` opens an optional history browser and replay UI.
+`curly` is a single-binary Rust HTTP client for personal JSON API workflows. The CLI is the primary automation interface; `curly tui` opens a keyboard-first request workspace with response inspection plus history/replay.
 
 The current implementation includes the CLI/executor, exact pipeline output, saved requests, SQLite history/replay, and the TUI. The currently supported and verified release target is Windows x64; Linux and macOS packaging are deferred until they can be properly verified.
 
@@ -85,19 +85,24 @@ URLs, query strings, and body previews may contain sensitive data. History is lo
 
 ## TUI
 
-`curly tui` requires interactive stdin and stdout. It shows searchable history beside request/response details and uses the same executor/replay validation as the CLI.
+`curly tui` requires interactive stdin and stdout. It opens on a request composer so you can set a method, URL, ordered headers/query parameters, a JSON/raw body (or `@file`), redirect/TLS options, send the request, and inspect the response without leaving the terminal. TUI requests use the same executor as the CLI and are recorded in the same local history.
 
 Controls:
 
-- `↑`/`↓` or `j`/`k`: move through history or scroll the focused details pane.
-- `Tab`: switch focus between history and details.
-- `h`: show headers.
-- `b`: show request/response body previews.
-- `PageUp`/`PageDown` and `Home`: scroll details.
-- `/`: filter history.
-- `r`: replay; methods other than GET, HEAD, and OPTIONS require confirmation.
-- `Esc`: cancel an active replay.
+- `1`/`F1`: request composer; `2`/`F2`: history.
+- In Request: `Tab` or `j`/`k` selects a field; `Enter` edits. Click the method to choose from a menu, or use `m` to cycle. `t` switches JSON/raw, `f` toggles redirects, `I` toggles insecure TLS, and `s`/`Ctrl+S` sends.
+- Headers and query parameters use **Name / Value rows**. `Tab`/`Enter` moves to the next cell, Shift+Tab moves back, and Up/Down changes rows. **+ Row**/`Ctrl+N` adds; **- Row**/`Ctrl+D` removes. Duplicate names and empty values are supported. Query values are URL-encoded automatically; an encoded preview shows what will be appended. Type literal values without `||` separators or manual percent encoding.
+- JSON/raw body editing supports multiline paste, Enter for indented newlines, Tab for two spaces, cursor arrows, Home/End, Backspace/Delete, and `Ctrl+U` to clear. JSON has live syntax coloring and validation with line/column errors. **Format**/`Ctrl+F` pretty-prints valid JSON; **Object** and **Array** create empty starters without replacing existing content. `@path` selects a body file; its contents are checked on send.
+- **Save**/`Ctrl+Enter` applies a valid edit; `Esc` discards it. URLs also accept Enter to save. `Ctrl+S` validates, saves, then sends. Invalid URLs, headers, query rows, and JSON remain in the editor with an explanation and cannot be saved/sent. An explicitly selected method is retained when adding a body.
+- In Request: `h` shows response headers; `b` shows the body, `PageUp`/`PageDown` scrolls, `n` starts a fresh request, and `Esc` cancels an active send.
+- In History: `↑`/`↓` or `j`/`k` navigates, `Tab` switches list/details focus, `/` filters, `h`/`b` switches header/body views, `e` loads a replayable request into the composer, and `r` replays it. Methods other than GET, HEAD, and OPTIONS require replay confirmation.
 - `q`: quit.
+
+Mouse controls: click workspace tabs, request fields, and history rows. The visible **Send**, **New**, transport/body-type controls, **Search**, **Edit**, **Replay**, and **Body / Headers** buttons perform the same actions as their keyboard shortcuts. The wheel scrolls the pane under the pointer (or moves history selection). The editor has **Save / Cancel** buttons; active requests have **Cancel**, and unsafe replay has a clickable confirmation. Mouse capture is restored on exit; native terminal text selection may require holding Shift.
+
+Response and history previews pretty-print JSON with colored keys, strings, numbers, and literals. HTML/XML uses a display-only tag layout with colored tag names, attributes, quoted values, and comments. Embedded script/style content remains plain text. Headers have colored names, binary data shows a summary, and truncated previews are marked in the pane title. Formatting/wrapping is cached and scrolling draws only visible lines; previews remain limited to 64 KiB and pipeline/download output is unchanged.
+
+The TUI uses a coordinated charcoal palette with a mint accent, a full-width method/URL/Send bar, separate headers/query/body sections, and a wider response viewer. Secondary controls have subdued styling; the active workspace and Send action are distinct. Response metrics stay above a line-numbered, syntax-colored viewport with a scroll indicator. Narrow terminals switch to compact request controls above the response. URL editing uses a compact dialog; multiline fields keep the larger editor. Idle screens wait for input instead of repeatedly formatting responses. `Ctrl+C` exits while idle and cancels an active request.
 
 The TUI restores raw mode, cursor visibility, and the alternate screen through its terminal-session guard on normal unwinding.
 
@@ -150,4 +155,4 @@ The Windows archive gets a SHA-256 checksum and a runtime dependency report. Pub
 - [Contributing](CONTRIBUTING.md)
 - [Security and local data](SECURITY.md)
 
-Multipart/forms, cookie jars, explicit proxy controls, collections/environments, curl import/export, plugins, and TUI request editing remain outside v1 scope.
+Multipart/forms, cookie jars, explicit proxy controls, collections/environments, curl import/export, plugins, and advanced TUI editing beyond the current fast request composer remain outside v1 scope.

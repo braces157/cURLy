@@ -39,10 +39,16 @@ Unchecked milestones are not implemented. Consult [SPEC.md](SPEC.md) for complet
 ## 4. TUI
 
 - [x] Interactive-stream requirements and terminal session cleanup through a terminal-session guard.
+- [x] Request-first workspace with keyboard editing for method, URL, ordered headers/query parameters, JSON/raw inline bodies or `@file`, redirect/TLS toggles, and bracketed paste.
+- [x] Shared asynchronous executor for newly composed TUI requests with response status/header/body preview, cancellation, truncation indicators, and history recording.
 - [x] Searchable history/details panes with header/body views, scrolling, JSON display highlighting, and truncation indicators.
-- [x] Arrows/j/k, Tab, /, r, q; confirmation for methods other than GET/HEAD/OPTIONS.
+- [x] Load replayable history requests into the composer for editing/resending; retain replay confirmation for methods other than GET/HEAD/OPTIONS.
 - [x] Asynchronous replay, loading feedback, cancellation, and recorded replay history.
 - [ ] Ratatui state/render tests and manual Windows resize/restoration checks. Cross-platform TUI verification is deferred with Linux/macOS support.
+
+- [x] Mouse tabs/fields/buttons/history selection and pane-specific wheel scrolling; cached JSON/HTML/XML syntax-colored previews.
+
+- [x] Guided header/query rows, JSON formatting and validation, URL checks, and a method picker.
 
 ## 5. Releases and documentation
 
@@ -60,4 +66,4 @@ Unchecked milestones are not implemented. Consult [SPEC.md](SPEC.md) for complet
 
 ## Deferred beyond v1
 
-Multipart/forms, cookie jars, explicit proxy controls, collections/environments, curl import/export, plugins, and a full TUI request editor.
+Multipart/forms, cookie jars, explicit proxy controls, collections/environments, curl import/export, plugins, and advanced TUI request editing beyond the current fast composer.

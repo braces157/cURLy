@@ -2,7 +2,7 @@
 
 ## Project
 
-Build `curly`, a Rust HTTP client for personal JSON API workflows. Ship one executable per supported target, with no server, account, or separately installed application libraries. The CLI is primary; the optional history TUI launches only through `curly tui`.
+Build `curly`, a Rust HTTP client for personal JSON API workflows. Ship one executable per supported target, with no server, account, or separately installed application libraries. The CLI remains the primary automation interface; `curly tui` is an interactive request workspace for quickly composing, sending, inspecting, editing, and replaying requests.
 
 Read [docs/SPEC.md](docs/SPEC.md) before implementation. It preserves the original product requirements. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PLAN.md](docs/PLAN.md), and [docs/TESTING.md](docs/TESTING.md) for design, sequencing, and acceptance checks. If these documents disagree, follow the user's current instructions, then the original specification. Resolve substantive ambiguity explicitly rather than silently weakening a requirement.
 
@@ -16,7 +16,7 @@ Implement in this order:
 4. TUI.
 5. Release packaging and documentation.
 
-Finish and verify each milestone before expanding scope. Defer multipart/forms, cookie jars, explicit proxy controls, collections/environments, curl import/export, plugins, and request editing in the TUI.
+Finish and verify each milestone before expanding scope. Defer multipart/forms, cookie jars, explicit proxy controls, collections/environments, curl import/export, and plugins. TUI request composition/editing is now in scope and supersedes the older history-only/v1-editor exclusions in the preserved original specification.
 
 ## Structure and dependencies
 
@@ -47,7 +47,9 @@ Finish and verify each milestone before expanding scope. Defer multipart/forms, 
 
 ## TUI
 
-Require interactive stdin and stdout. Provide searchable history beside request/response details, header/body views, scrolling, JSON highlighting, and visible truncation. Support arrows/j/k, Tab, /, r, and q. Confirm replay of methods other than GET, HEAD, and OPTIONS. Include asynchronous loading, cancellation, and history recording for replays. Restore terminal state after normal exit, errors, and panic.
+Require interactive stdin and stdout. Open on a fast request composer rather than a history-only screen. Let users set method, URL, ordered/repeated headers and query parameters, JSON/raw inline bodies or body files, and key transport toggles; execute through the same asynchronous executor as the CLI; show response status/headers/body preview with scrolling and visible truncation; support cancellation; and record TUI-created requests in history.
+
+Keep searchable history as a first-class secondary workspace with request/response details, header/body views, replay, and a way to load a replayable history request back into the composer for editing and resending. Confirm replay of methods other than GET, HEAD, and OPTIONS. Keep keyboard controls discoverable in the UI, support bracketed paste for request values/bodies, behave sensibly in smaller terminals, and restore terminal state after normal exit, errors, and panic.
 
 ## Verification and completion
 

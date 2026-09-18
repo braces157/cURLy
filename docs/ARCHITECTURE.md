@@ -15,13 +15,13 @@ The repository uses one Cargo package, `curly`, with a thin binary and a library
 | `storage::config` | Platform directory resolution, configuration loading and validation |
 | `storage::saved` | Versioned TOML definitions, names, overwrite rules, relative body-file resolution |
 | `storage::history` | SQLite migrations, redaction, bounded previews, retention, replay eligibility |
-| `tui` | Application state, event handling, rendering, asynchronous request coordination |
+| `tui` | Request composer, history workspace, event handling, rendering, asynchronous request coordination |
 
 Use Tokio for asynchronous work, clap for CLI parsing, serde/serde_json and TOML for serialization, Ratatui/Crossterm for the terminal UI, and rusqlite with bundled SQLite. Dependency versions and feature selections will be recorded in Cargo metadata and its generated lockfile during scaffolding.
 
 ## Request lifecycle
 
-1. Parse CLI input or load a saved/history definition.
+1. Parse CLI input, build a request in the TUI composer, or load a saved/history definition.
 2. Validate URL, method, exclusive body/auth options, and transport settings into a shared request model.
 3. Resolve environment references and body sources for execution, retaining the unresolved definition separately for safe persistence.
 4. Execute through a single shared executor. Pass cancellation through to the active operation.
@@ -62,10 +62,16 @@ Redact sensitive header values before serialization, including case variants. Ke
 
 Record enough metadata to distinguish complete replay inputs from previews, truncated bodies, and redacted credentials. Do not treat a redaction marker as a usable input. Missing files, missing environment variables, missing literal credentials, and incomplete bodies must produce actionable errors before sending a request. Define and document the saved-request policy for explicitly supplied literal secrets before enabling saved authentication.
 
-TUI replay confirms methods other than GET, HEAD, and OPTIONS and records each replay in history. The CLI and TUI use the same replay validation and executor.
+The TUI composer creates the same `RequestDefinition` used by the CLI and executes it through the same executor. Completed TUI requests are recorded in history. TUI replay confirms methods other than GET, HEAD, and OPTIONS, and replayable history requests can be loaded back into the composer for editing before an explicit send.
 
 ## Terminal lifecycle and releases
 
 Use an explicit terminal-session guard and panic handling to restore raw mode, cursor visibility, and the alternate screen. Structure the TUI around testable state transitions and asynchronous completion events, including loading and cancellation.
 
 Release packaging currently targets only `x86_64-pc-windows-msvc`, which has been locally built, smoke-tested, and dependency-inspected. Linux and macOS packaging are deferred until those targets can be verified on their native platforms.
+
+TUI mouse hit targets are registered from the rectangles actually rendered, including the current history list offset. Modal editors, help, replay confirmation, and loading expose only their own actions. Clicks share keyboard action handlers. `tui::preview` builds terminal-safe, bounded JSON/HTML/XML/header text, caches wrapping by pane width, and renders only the visible lines. Source response bytes and stored previews are unchanged. Mouse capture is paired with terminal-session cleanup, including setup failure.
+
+The TUI shell owns its full background palette and uses a full-width endpoint bar above asymmetric request/response panes. Request sections collapse to compact controls on small terminals. Response documents cache wrapping at the content width (excluding the line-number gutter), and rendering clones only the visible rows. Status metrics and truncation remain outside the scrolling response content.
+
+`tui::editor` maintains temporary ordered name/value rows for headers and query parameters, commits only validated drafts, and retains structured pairs instead of reconstructing them from display delimiters. JSON editing validates before commit and request construction; body-file I/O remains in the executor. Formatting and starter templates are explicit actions.
