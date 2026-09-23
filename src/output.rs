@@ -76,16 +76,20 @@ pub async fn write_response(
                 total += chunk.len() as u64;
                 append_preview(&mut preview, &chunk);
             }
-            let content_type = content_type.as_deref().unwrap_or("unknown");
-            println!("[binary response: {total} bytes, content-type: {content_type}]");
+            write_stdout(binary_summary(total, content_type.as_deref()).as_bytes()).await?;
         } else {
             let mut candidate = Vec::with_capacity(TERMINAL_JSON_LIMIT + 1);
             let mut overflow = false;
+            let mut binary_detected = false;
+            let mut wrote_terminal_text = false;
             let mut escaper = TerminalEscaper::default();
 
             while let Some(chunk) = next_chunk(&mut stream, cancel).await? {
                 total += chunk.len() as u64;
                 append_preview(&mut preview, &chunk);
+                if binary_detected {
+                    continue;
+                }
                 if !overflow && candidate.len() + chunk.len() <= TERMINAL_JSON_LIMIT {
                     candidate.extend_from_slice(&chunk);
                     continue;
@@ -93,19 +97,49 @@ pub async fn write_response(
 
                 if !overflow {
                     overflow = true;
-                    if !candidate.is_empty() {
-                        let rendered = escaper.push(&candidate, false);
-                        write_stdout(rendered.as_bytes()).await?;
-                        candidate.clear();
+                    let candidate_contains_nul = candidate.contains(&0);
+                    let prefix = escaper.push(&candidate, false);
+                    candidate.clear();
+                    let rendered = escaper.push(&chunk, false);
+                    if candidate_contains_nul || chunk.contains(&0) || escaper.saw_invalid_utf8() {
+                        binary_detected = true;
+                        continue;
                     }
+                    if !prefix.is_empty() {
+                        write_stdout(prefix.as_bytes()).await?;
+                        wrote_terminal_text = true;
+                    }
+                    if !rendered.is_empty() {
+                        write_stdout(rendered.as_bytes()).await?;
+                        wrote_terminal_text = true;
+                    }
+                    continue;
                 }
+
                 let rendered = escaper.push(&chunk, false);
+                if chunk.contains(&0) || escaper.saw_invalid_utf8() {
+                    binary_detected = true;
+                    continue;
+                }
                 write_stdout(rendered.as_bytes()).await?;
+                wrote_terminal_text |= !rendered.is_empty();
             }
 
-            if overflow {
+            if binary_detected {
+                if wrote_terminal_text {
+                    write_stdout(b"\n").await?;
+                }
+                write_stdout(binary_summary(total, content_type.as_deref()).as_bytes()).await?;
+            } else if overflow {
                 let rendered = escaper.push(&[], true);
-                write_stdout(rendered.as_bytes()).await?;
+                if escaper.saw_invalid_utf8() {
+                    if wrote_terminal_text {
+                        write_stdout(b"\n").await?;
+                    }
+                    write_stdout(binary_summary(total, content_type.as_deref()).as_bytes()).await?;
+                } else {
+                    write_stdout(rendered.as_bytes()).await?;
+                }
             } else {
                 display_terminal_candidate(&candidate, options.color).await?;
             }
@@ -193,6 +227,15 @@ fn is_textual_content_type(value: &str) -> bool {
         || value.contains("yaml")
 }
 
+fn binary_summary(total: u64, content_type: Option<&str>) -> String {
+    match content_type {
+        Some(content_type) => {
+            format!("[binary response: {total} bytes, content-type: {content_type}]\n")
+        }
+        None => format!("[binary response: {total} bytes]\n"),
+    }
+}
+
 async fn display_terminal_candidate(bytes: &[u8], color: ColorMode) -> Result<(), CurlyError> {
     if bytes.is_empty() {
         return Ok(());
@@ -214,7 +257,7 @@ async fn display_terminal_candidate(bytes: &[u8], color: ColorMode) -> Result<()
         return Ok(());
     }
 
-    if std::str::from_utf8(bytes).is_err() {
+    if bytes.contains(&0) || std::str::from_utf8(bytes).is_err() {
         println!("[binary response: {} bytes]", bytes.len());
         return Ok(());
     }
@@ -241,6 +284,7 @@ async fn write_stdout(bytes: &[u8]) -> Result<(), CurlyError> {
 #[derive(Default)]
 struct TerminalEscaper {
     pending: Vec<u8>,
+    invalid_utf8: bool,
 }
 
 impl TerminalEscaper {
@@ -266,12 +310,14 @@ impl TerminalEscaper {
                     }
                     match err.error_len() {
                         Some(length) => {
+                            self.invalid_utf8 = true;
                             for byte in &data[offset..offset + length] {
                                 out.push_str(&format!("\\x{byte:02X}"));
                             }
                             offset += length;
                         }
                         None if final_chunk => {
+                            self.invalid_utf8 = true;
                             for byte in &data[offset..] {
                                 out.push_str(&format!("\\x{byte:02X}"));
                             }
@@ -287,12 +333,18 @@ impl TerminalEscaper {
         }
         out
     }
+
+    fn saw_invalid_utf8(&self) -> bool {
+        self.invalid_utf8
+    }
 }
 
 fn escape_text(text: &str, out: &mut String) {
     for ch in text.chars() {
         match ch {
-            '\n' | '\r' | '\t' => out.push(ch),
+            '\n' => out.push(ch),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
             ch if ch.is_control() => {
                 if (ch as u32) <= 0xff {
                     out.push_str(&format!("\\x{:02X}", ch as u32));
@@ -321,5 +373,22 @@ mod tests {
         assert_eq!(escaper.push(&euro[..1], false), "");
         assert_eq!(escaper.push(&euro[1..], false), "€");
         assert_eq!(escaper.push(b"\x1b[31m", true), "\\x1B[31m");
+        assert!(!escaper.saw_invalid_utf8());
+    }
+
+    #[test]
+    fn terminal_escaper_flags_binary_utf8_errors() {
+        let mut escaper = TerminalEscaper::default();
+        assert_eq!(escaper.push(b"text", false), "text");
+        let _ = escaper.push(&[0xff, 0xfe], false);
+        assert!(escaper.saw_invalid_utf8());
+    }
+
+    #[test]
+    fn terminal_escaper_does_not_emit_carriage_return_or_tab() {
+        assert_eq!(
+            escape_terminal_bytes(b"hello\rworld\tend\n"),
+            "hello\\rworld\\tend\n"
+        );
     }
 }

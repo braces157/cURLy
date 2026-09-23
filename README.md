@@ -6,10 +6,11 @@ The current implementation includes the CLI/executor, exact pipeline output, sav
 
 ## Build
 
-Use stable Rust with the committed lockfile:
+For a Windows x64 release build, use the same static CRT setting as the release workflow:
 
-```sh
-cargo build --release --locked
+```powershell
+$env:RUSTFLAGS = "-C target-feature=+crt-static"
+cargo build --release --locked --target x86_64-pc-windows-msvc
 ```
 
 For development:
