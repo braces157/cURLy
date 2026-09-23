@@ -1,8 +1,14 @@
-use std::{pin::Pin, time::Duration};
+use std::{
+    io::{self, Read},
+    path::{Path, PathBuf},
+    pin::Pin,
+    time::Duration,
+};
 
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
 use reqwest::{Body, Client, Response, header::HeaderValue, redirect::Policy};
+use serde::Deserialize;
 use tokio_util::{io::ReaderStream, sync::CancellationToken};
 
 use crate::{
@@ -60,7 +66,10 @@ pub async fn execute(
         None => {}
     }
 
-    let (body, preview) = prepare_body(request).await?;
+    let (body, preview) = tokio::select! {
+        _ = cancel.cancelled() => return Err(CurlyError::Cancelled),
+        result = prepare_body(request, cancel) => result?,
+    };
     if let Some(body) = body {
         if matches!(
             request.body.as_ref().map(BodySource::kind),
@@ -127,6 +136,7 @@ fn response_parts(response: Response, elapsed_to_headers: Duration) -> ExecutedR
 
 async fn prepare_body(
     request: &RequestDefinition,
+    cancel: &CancellationToken,
 ) -> Result<(Option<Body>, RequestPreview), CurlyError> {
     const PREVIEW_LIMIT: usize = 64 * 1024;
     let Some(source) = &request.body else {
@@ -142,29 +152,21 @@ async fn prepare_body(
 
     match source {
         BodySource::Inline { kind, value } => {
-            let bytes = value.as_bytes();
-            validate_json_if_needed(*kind, bytes)?;
+            let bytes = validate_json_bytes(*kind, value.as_bytes().to_vec(), cancel).await?;
+            let total_bytes = bytes.len() as u64;
             let preview = bytes[..bytes.len().min(PREVIEW_LIMIT)].to_vec();
             Ok((
-                Some(Body::from(value.clone())),
+                Some(Body::from(bytes)),
                 RequestPreview {
                     bytes: preview,
-                    truncated: bytes.len() > PREVIEW_LIMIT,
-                    total_bytes: bytes.len() as u64,
+                    truncated: total_bytes > PREVIEW_LIMIT as u64,
+                    total_bytes,
                 },
             ))
         }
         BodySource::File { kind, path } => {
             if *kind == BodyKind::Json {
-                let validation_file = std::fs::File::open(path).map_err(|err| {
-                    CurlyError::Invalid(format!(
-                        "cannot open JSON body file {}: {err}",
-                        path.display()
-                    ))
-                })?;
-                serde_json::from_reader::<_, serde_json::Value>(validation_file).map_err(
-                    |err| CurlyError::Invalid(format!("invalid JSON in {}: {err}", path.display())),
-                )?;
+                validate_json_file(path, cancel).await?;
             }
             let metadata = tokio::fs::metadata(path).await.map_err(|err| {
                 CurlyError::Invalid(format!("cannot read body file {}: {err}", path.display()))
@@ -190,27 +192,106 @@ async fn prepare_body(
         BodySource::Stdin { kind } => {
             let mut bytes = Vec::new();
             use tokio::io::AsyncReadExt;
-            tokio::io::stdin().read_to_end(&mut bytes).await?;
-            validate_json_if_needed(*kind, &bytes)?;
+            let mut stdin = tokio::io::stdin();
+            tokio::select! {
+                _ = cancel.cancelled() => return Err(CurlyError::Cancelled),
+                result = stdin.read_to_end(&mut bytes) => result?,
+            };
+            let bytes = validate_json_bytes(*kind, bytes, cancel).await?;
+            let total_bytes = bytes.len() as u64;
             let preview = bytes[..bytes.len().min(PREVIEW_LIMIT)].to_vec();
             Ok((
-                Some(Body::from(bytes.clone())),
+                Some(Body::from(bytes)),
                 RequestPreview {
                     bytes: preview,
-                    truncated: bytes.len() > PREVIEW_LIMIT,
-                    total_bytes: bytes.len() as u64,
+                    truncated: total_bytes > PREVIEW_LIMIT as u64,
+                    total_bytes,
                 },
             ))
         }
     }
 }
 
-fn validate_json_if_needed(kind: BodyKind, bytes: &[u8]) -> Result<(), CurlyError> {
-    if kind == BodyKind::Json {
-        serde_json::from_slice::<serde_json::Value>(bytes)
-            .map_err(|err| CurlyError::Invalid(format!("invalid JSON request body: {err}")))?;
+async fn validate_json_bytes(
+    kind: BodyKind,
+    bytes: Vec<u8>,
+    cancel: &CancellationToken,
+) -> Result<Vec<u8>, CurlyError> {
+    if kind != BodyKind::Json {
+        return Ok(bytes);
     }
-    Ok(())
+
+    let worker_cancel = cancel.clone();
+    let task = tokio::task::spawn_blocking(move || {
+        let result = {
+            let reader = CancellationReader::new(
+                std::io::Cursor::new(bytes.as_slice()),
+                worker_cancel.clone(),
+            );
+            let mut deserializer = serde_json::Deserializer::from_reader(reader);
+            serde::de::IgnoredAny::deserialize(&mut deserializer).and_then(|_| deserializer.end())
+        };
+        if worker_cancel.is_cancelled() {
+            return Err(CurlyError::Cancelled);
+        }
+        result.map_err(|err| CurlyError::Invalid(format!("invalid JSON request body: {err}")))?;
+        Ok(bytes)
+    });
+
+    tokio::select! {
+        _ = cancel.cancelled() => Err(CurlyError::Cancelled),
+        result = task => result
+            .map_err(|err| CurlyError::Io(io::Error::other(format!("JSON validation worker failed: {err}"))))?,
+    }
+}
+
+async fn validate_json_file(path: &Path, cancel: &CancellationToken) -> Result<(), CurlyError> {
+    let path = path.to_path_buf();
+    let worker_cancel = cancel.clone();
+    let task =
+        tokio::task::spawn_blocking(move || validate_json_file_blocking(path, worker_cancel));
+    tokio::select! {
+        _ = cancel.cancelled() => Err(CurlyError::Cancelled),
+        result = task => result
+            .map_err(|err| CurlyError::Io(io::Error::other(format!("JSON validation worker failed: {err}"))))?,
+    }
+}
+
+fn validate_json_file_blocking(path: PathBuf, cancel: CancellationToken) -> Result<(), CurlyError> {
+    let file = std::fs::File::open(&path).map_err(|err| {
+        CurlyError::Invalid(format!(
+            "cannot open JSON body file {}: {err}",
+            path.display()
+        ))
+    })?;
+    let reader = CancellationReader::new(file, cancel.clone());
+    let mut deserializer = serde_json::Deserializer::from_reader(reader);
+    let result =
+        serde::de::IgnoredAny::deserialize(&mut deserializer).and_then(|_| deserializer.end());
+    if cancel.is_cancelled() {
+        return Err(CurlyError::Cancelled);
+    }
+    result.map_err(|err| CurlyError::Invalid(format!("invalid JSON in {}: {err}", path.display())))
+}
+
+struct CancellationReader<R> {
+    inner: R,
+    cancel: CancellationToken,
+}
+
+impl<R> CancellationReader<R> {
+    fn new(inner: R, cancel: CancellationToken) -> Self {
+        Self { inner, cancel }
+    }
+}
+
+impl<R: Read> Read for CancellationReader<R> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if self.cancel.is_cancelled() {
+            return Err(io::Error::other("operation cancelled"));
+        }
+        self.inner.read(buffer)
+    }
 }
 
 pub async fn collect_stream(
@@ -259,5 +340,30 @@ mod tests {
         };
         assert!(matches!(error, CurlyError::Cancelled));
         assert_eq!(error.exit_code(), 130);
+    }
+
+    #[tokio::test]
+    async fn json_validation_honors_cancellation() {
+        let cancellation = CancellationToken::new();
+        cancellation.cancel();
+        let result = validate_json_bytes(
+            BodyKind::Json,
+            br#"{"large":[1,2,3]}"#.to_vec(),
+            &cancellation,
+        )
+        .await;
+        assert!(matches!(result, Err(CurlyError::Cancelled)));
+    }
+
+    #[tokio::test]
+    async fn json_validation_rejects_trailing_data() {
+        let cancellation = CancellationToken::new();
+        let result = validate_json_bytes(
+            BodyKind::Json,
+            br#"{"ok":true} trailing"#.to_vec(),
+            &cancellation,
+        )
+        .await;
+        assert!(matches!(result, Err(CurlyError::Invalid(_))));
     }
 }

@@ -70,10 +70,45 @@ pub fn save(
         .join(format!(".{name}.toml.tmp-{}", std::process::id()));
     std::fs::write(&temporary, text)?;
     if overwrite && destination.exists() {
-        std::fs::remove_file(&destination)?;
+        replace_existing(&temporary, &destination, name)?;
+    } else {
+        std::fs::rename(&temporary, &destination)?;
     }
-    std::fs::rename(&temporary, &destination)?;
     Ok(destination)
+}
+
+fn replace_existing(temporary: &Path, destination: &Path, name: &str) -> Result<(), CurlyError> {
+    // On platforms where rename replaces an existing file, this is atomic.
+    if std::fs::rename(temporary, destination).is_ok() {
+        return Ok(());
+    }
+
+    // Windows std::fs::rename does not replace existing files. Preserve the old
+    // definition as a backup until the new complete file is in place so a failed
+    // second rename cannot destroy the user's saved request.
+    let backup = destination.with_file_name(format!(".{name}.toml.backup-{}", std::process::id()));
+    if backup.exists() {
+        std::fs::remove_file(&backup)?;
+    }
+    std::fs::rename(destination, &backup)?;
+    match std::fs::rename(temporary, destination) {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&backup);
+            Ok(())
+        }
+        Err(err) => {
+            let restore = std::fs::rename(&backup, destination);
+            if let Err(restore_err) = restore {
+                return Err(CurlyError::Io(std::io::Error::new(
+                    err.kind(),
+                    format!(
+                        "could not replace saved request and could not restore the previous file: {err}; restore failed: {restore_err}"
+                    ),
+                )));
+            }
+            Err(CurlyError::Io(err))
+        }
+    }
 }
 
 pub fn load(paths: &StoragePaths, name: &str) -> Result<RequestDefinition, CurlyError> {
@@ -203,6 +238,37 @@ mod tests {
     fn rejects_path_traversal_names() {
         assert!(validate_name("../secret").is_err());
         assert!(validate_name("good-name_2").is_ok());
+    }
+
+    #[test]
+    fn overwrite_replaces_existing_request() {
+        let temp = TempDir::new().unwrap();
+        let paths = paths(&temp);
+        let first = RequestDefinition::new(
+            "https://example.test/first".into(),
+            None,
+            vec![],
+            vec![],
+            None,
+            None,
+            TransportOptions::default(),
+        )
+        .unwrap();
+        let second = RequestDefinition::new(
+            "https://example.test/second".into(),
+            None,
+            vec![],
+            vec![],
+            None,
+            None,
+            TransportOptions::default(),
+        )
+        .unwrap();
+
+        save(&paths, "replace-me", &first, false).unwrap();
+        save(&paths, "replace-me", &second, true).unwrap();
+
+        assert_eq!(load(&paths, "replace-me").unwrap().url, second.url);
     }
 
     #[test]

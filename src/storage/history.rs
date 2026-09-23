@@ -145,11 +145,10 @@ impl HistoryStore {
     fn connection(&self) -> Result<Connection, CurlyError> {
         let conn = Connection::open(&self.path)
             .map_err(|err| CurlyError::History(format!("cannot open history database: {err}")))?;
-        conn.busy_timeout(Duration::from_millis(750))
-            .map_err(|err| {
-                CurlyError::History(format!("cannot configure history database: {err}"))
-            })?;
-        conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")
+        conn.busy_timeout(Duration::from_secs(5)).map_err(|err| {
+            CurlyError::History(format!("cannot configure history database: {err}"))
+        })?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")
             .map_err(|err| {
                 CurlyError::History(format!("cannot configure history database: {err}"))
             })?;
@@ -158,6 +157,8 @@ impl HistoryStore {
 
     fn migrate(&self) -> Result<(), CurlyError> {
         let mut conn = self.connection()?;
+        conn.execute_batch("PRAGMA journal_mode = WAL;")
+            .map_err(history_err)?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS schema_migrations (
                 version INTEGER PRIMARY KEY,
